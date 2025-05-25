@@ -1,13 +1,13 @@
 pipeline {
     agent any
     environment {
-        SERVICE = 'order-service'
+        SERVICE = 'product-service'
         NAME = "leosfreitas/${env.SERVICE}"
     }
     stages {
         stage('Dependencies') {
             steps {
-                build job: 'order-service', wait: true
+                echo 'Installing dependencies...'
             }
         }
         stage('Build') { 
