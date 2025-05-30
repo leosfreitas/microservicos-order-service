@@ -7,7 +7,7 @@ pipeline {
     stages {
         stage('Dependencies') {
             steps {
-                echo 'Installing dependencies...'
+                build job: 'order-service', wait: true
             }
         }
         stage('Build') { 

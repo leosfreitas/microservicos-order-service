@@ -1,11 +1,13 @@
-// OrderService.java
 package store.order;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.CachePut;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -15,6 +17,7 @@ import org.springframework.web.server.ResponseStatusException;
 import store.product.ProductOut;
 
 @Service
+@EnableCaching
 public class OrderService {
 
     @Autowired
@@ -26,6 +29,7 @@ public class OrderService {
     @Autowired
     private RestTemplate restTemplate;
 
+    @Cacheable(value = "products", key = "#id")
     private ProductOut findProductById(String id) {
         String url = "http://product:8080/product/" + id;
         try {
@@ -41,34 +45,29 @@ public class OrderService {
         }
     }
 
+    @CachePut(value = "orders", key = "#result.id()")
+    @CacheEvict(value = "ordersByAccount", key = "#idAccount")
     public OrderOut create(OrderIn orderIn, String idAccount) {
-        // Validações
         if (orderIn.items() == null || orderIn.items().isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order must have at least one item");
         }
         
-        // Preparar o pedido
         Order order = OrderParser.to(orderIn, idAccount);
         double orderTotal = 0.0;
         
-        // Recuperar produtos e calcular totais
         List<OrderItem> orderItems = new ArrayList<>();
         List<ProductOut> products = new ArrayList<>();
         
         for (OrderItemIn itemIn : orderIn.items()) {
-            // Validação da quantidade
             if (itemIn.quantity() == null || itemIn.quantity() <= 0) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Item quantity must be greater than zero");
             }
             
-            // Buscar produto usando RestTemplate
             ProductOut product = findProductById(itemIn.idProduct());
             products.add(product);
             
-            // Calcular total do item
             double itemTotal = product.price() * itemIn.quantity();
             
-            // Criar item do pedido
             OrderItem orderItem = OrderItem.builder()
                 .idProduct(itemIn.idProduct())
                 .quantity(itemIn.quantity())
@@ -79,14 +78,11 @@ public class OrderService {
             orderTotal += itemTotal;
         }
         
-        // Definir o total do pedido
         order.total(orderTotal);
         
-        // Salvar o pedido
         OrderModel savedOrder = orderRepository.save(new OrderModel(order));
         order = savedOrder.to();
         
-        // Salvar os itens do pedido
         List<OrderItem> savedItems = new ArrayList<>();
         for (OrderItem item : orderItems) {
             item.idOrder(order.id());
@@ -94,10 +90,10 @@ public class OrderService {
             savedItems.add(savedItem.to());
         }
         
-        // Montar resposta
         return OrderParser.to(order, savedItems, products);
     }
 
+    @Cacheable(value = "ordersByAccount", key = "#idAccount")
     public List<OrderOut> findAllByAccount(String idAccount) {
         List<OrderOut> result = new ArrayList<>();
         for (OrderModel orderModel : orderRepository.findByIdAccount(idAccount)) {
@@ -106,25 +102,22 @@ public class OrderService {
         return result;
     }
     
+    @Cacheable(value = "orders", key = "#id")
     public OrderOut findByIdAndAccount(String id, String idAccount) {
-        // Buscar o pedido
         OrderModel orderModel = orderRepository.findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
         
         Order order = orderModel.to();
         
-        // Verificar se o pedido pertence ao usuário atual
         if (!order.idAccount().equals(idAccount)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found");
         }
         
-        // Buscar os itens do pedido
         List<OrderItem> items = new ArrayList<>();
         for (OrderItemModel itemModel : orderItemRepository.findByIdOrder(id)) {
             items.add(itemModel.to());
         }
         
-        // Buscar os produtos usando RestTemplate
         List<ProductOut> products = new ArrayList<>();
         for (OrderItem item : items) {
             ProductOut product = findProductById(item.idProduct());
@@ -133,7 +126,6 @@ public class OrderService {
             }
         }
         
-        // Montar resposta
         return OrderParser.to(order, items, products);
     }
 }
