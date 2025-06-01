@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: order
-          image: leosfreitas/order-service:latest
+          image: leosfreitas/order:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
