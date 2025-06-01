@@ -1,4 +1,3 @@
-// OrderParser.java
 package store.order;
 
 import java.time.LocalDateTime;
@@ -28,22 +27,38 @@ public class OrderParser {
             .build();
     }
 
-    // MÉTODO CORRIGIDO - removeu toda a lógica dos items
-    public static OrderOut to(Order order, List<OrderItem> items, List<ProductOut> products) {
+    // Para GET /order/{id} e POST /order (com items)
+    public static OrderOut toWithItems(Order order, List<OrderItem> items, List<ProductOut> products) {
         if (order == null) return null;
         
-        // Como OrderOut não tem mais items, só retorna os dados básicos
+        List<OrderItemOut> itemsOut = new ArrayList<>();
+        for (int i = 0; i < items.size(); i++) {
+            OrderItem item = items.get(i);
+            ProductOut product = products.get(i);
+            
+            OrderItemOut itemOut = OrderItemOut.builder()
+                .id(item.id())
+                .product(product)
+                .quantity(item.quantity())
+                .total(item.total())
+                .build();
+            
+            itemsOut.add(itemOut);
+        }
+        
         return OrderOut.builder()
             .id(order.id())
             .date(order.date())
+            .items(itemsOut)
             .total(order.total())
             .build();
     }
     
-    public static OrderOut toSummary(Order order) {
+    // Para GET /order (lista resumida, sem items)
+    public static OrderSummaryOut toSummary(Order order) {
         if (order == null) return null;
         
-        return OrderOut.builder()
+        return OrderSummaryOut.builder()
             .id(order.id())
             .date(order.date())
             .total(order.total())

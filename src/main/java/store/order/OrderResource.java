@@ -1,4 +1,3 @@
-// OrderResource.java
 package store.order;
 
 import java.util.List;
@@ -20,7 +19,7 @@ public class OrderResource implements OrderController {
     }
 
     @Override
-    public ResponseEntity<List<OrderOut>> findAll(String idAccount) {
+    public ResponseEntity<List<OrderSummaryOut>> findAll(String idAccount) {
         return ResponseEntity
             .ok()
             .body(orderService.findAllByAccount(idAccount));

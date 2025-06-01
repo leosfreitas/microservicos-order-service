@@ -90,12 +90,12 @@ public class OrderService {
             savedItems.add(savedItem.to());
         }
         
-        return OrderParser.to(order, savedItems, products);
+        return OrderParser.toWithItems(order, savedItems, products);
     }
 
     @Cacheable(value = "ordersByAccount", key = "#idAccount")
-    public List<OrderOut> findAllByAccount(String idAccount) {
-        List<OrderOut> result = new ArrayList<>();
+    public List<OrderSummaryOut> findAllByAccount(String idAccount) {
+        List<OrderSummaryOut> result = new ArrayList<>();
         for (OrderModel orderModel : orderRepository.findByIdAccount(idAccount)) {
             result.add(OrderParser.toSummary(orderModel.to()));
         }
@@ -126,6 +126,6 @@ public class OrderService {
             }
         }
         
-        return OrderParser.to(order, items, products);
+        return OrderParser.toWithItems(order, items, products);
     }
 }
