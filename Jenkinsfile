@@ -1,84 +1,29 @@
 pipeline {
     agent any
-    
     environment {
-        DOCKER_IMAGE = "leosfreitas/gateway"
-        DOCKER_TAG = "${BUILD_NUMBER}"
-        AWS_REGION = "us-east-2"
-        EKS_CLUSTER = "eks-store"
-        KUBE_NAMESPACE = "default"
-        SERVICE_NAME = "gateway"
+        SERVICE = 'order'
+        NAME = "leosfreitas/${env.SERVICE}"
     }
-    
     stages {
-        stage('Checkout') {
+        stage('Dependencies') {
             steps {
-                checkout scm
+                build job: 'product', wait: true
             }
         }
-        
-        stage('Build Application') {
+        stage('Build') { 
             steps {
-                script {
-                    sh 'mvn clean package -DskipTests'
+                sh 'mvn -B -DskipTests clean package'
+            }
+        }      
+        stage('Build & Push Image') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-credential', usernameVariable: 'USERNAME', passwordVariable: 'TOKEN')]) {
+                    sh "docker login -u $USERNAME -p $TOKEN"
+                    sh "docker buildx create --use --platform=linux/arm64,linux/amd64 --node multi-platform-builder-${env.SERVICE} --name multi-platform-builder-${env.SERVICE}"
+                    sh "docker buildx build --platform=linux/arm64,linux/amd64 --push --tag ${env.NAME}:latest --tag ${env.NAME}:${env.BUILD_ID} -f Dockerfile ."
+                    sh "docker buildx rm --force multi-platform-builder-${env.SERVICE}"
                 }
             }
-        }
-        
-        stage('Build Docker Image') {
-            steps {
-                script {
-                    def image = docker.build("${DOCKER_IMAGE}:${DOCKER_TAG}", ".")
-                    docker.withRegistry('https://registry-1.docker.io/v2/', 'docker-hub-credentials') {
-                        image.push()
-                        image.push("latest")
-                    }
-                }
-            }
-        }
-        
-        stage('Deploy to EKS') {
-            steps {
-                withCredentials([
-                    string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
-                    string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
-                ]) {
-                    script {
-                        sh """
-                            aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
-                            aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
-                            aws configure set region ${AWS_REGION}
-                            aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER}
-                            kubectl set image deployment/${SERVICE_NAME} ${SERVICE_NAME}=${DOCKER_IMAGE}:${DOCKER_TAG} -n ${KUBE_NAMESPACE}
-                            kubectl rollout status deployment/${SERVICE_NAME} -n ${KUBE_NAMESPACE}
-                            kubectl get pods -n ${KUBE_NAMESPACE}
-                        """
-                    }
-                }
-            }
-        }
-        
-        stage('Verify Deployment') {
-            steps {
-                script {
-                    sh """
-                        kubectl get services -n ${KUBE_NAMESPACE}
-                        kubectl describe deployment ${SERVICE_NAME} -n ${KUBE_NAMESPACE}
-                    """
-                }
-            }
-        }
-    }
-    
-    post {
-        success {
-            echo 'Deploy do ${SERVICE_NAME} realizado com sucesso!'
-        }
-        failure {
-            echo 'Deploy do ${SERVICE_NAME} falhou!'
-        }
-        always {
-            cleanWs()
         }
     }
 }
